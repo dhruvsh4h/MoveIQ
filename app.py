@@ -67,50 +67,42 @@ def create_globe_visualization(cities_df):
     if cities_df.empty:
         return None
     
+    # Clean and prepare data for visualization
+    cities_df = cities_df.dropna(subset=['standardized_aqi', 'cost_of_living_index', 'life_expectancy'])
+    
     # Prepare data for visualization
-    cities_df['elevation'] = cities_df['standardized_aqi'] * 1000  # Scale for visibility
+    cities_df['elevation'] = cities_df['standardized_aqi'] * 2000  # Scale for better visibility
     cities_df['color'] = cities_df['standardized_aqi'].apply(get_aqi_color)
     
-    # Create the pydeck layer
+    # Create the globe layer with proper 3D globe view
     layer = pdk.Layer(
         'ColumnLayer',
         data=cities_df,
         get_position=['longitude', 'latitude'],
         get_elevation='elevation',
-        elevation_scale=50,
+        elevation_scale=1,
         get_fill_color='color',
-        radius=50000,
+        radius=100000,  # Larger radius for better visibility
         pickable=True,
         auto_highlight=True,
     )
     
-    # Set the viewport location
+    # Set the viewport for globe view
     view_state = pdk.ViewState(
         longitude=0,
         latitude=20,
-        zoom=1,
-        min_zoom=1,
+        zoom=0.5,  # Lower zoom for globe view
+        min_zoom=0,
         max_zoom=15,
-        pitch=60,
+        pitch=0,  # Start with flat view, user can rotate
         bearing=0
     )
     
-    # Render
+    # Render with globe map style
     deck = pdk.Deck(
         layers=[layer],
         initial_view_state=view_state,
-        tooltip={
-            'html': '''
-            <b>{city_name}, {country}</b><br/>
-            AQI: {standardized_aqi}<br/>
-            Cost Index: {cost_of_living_index}<br/>
-            Life Expectancy: {life_expectancy} years
-            ''',
-            'style': {
-                'backgroundColor': 'steelblue',
-                'color': 'white'
-            }
-        }
+        map_style='mapbox://styles/mapbox/satellite-v9'  # Globe-like appearance
     )
     
     return deck
@@ -282,20 +274,52 @@ def main():
     
     st.session_state.cities_data = cities_df
     
+    # Clean data for use throughout the app
+    clean_df = cities_df.dropna(subset=['standardized_aqi', 'cost_of_living_index', 'life_expectancy'])
+    
     # Create and display the globe
     st.markdown("### 🌐 Interactive 3D Globe")
     st.markdown("*3D bars represent Air Quality Index (AQI) - height and color indicate air quality levels*")
     
     deck = create_globe_visualization(cities_df)
     if deck:
-        selected_data = st.pydeck_chart(deck, on_select="rerun")
+        st.pydeck_chart(deck)
         
-        # Handle selection if data is returned
-        if selected_data and selected_data['selection']['indices']:
-            selected_indices = selected_data['selection']['indices']
-            if selected_indices:
-                selected_city_data = cities_df.iloc[selected_indices]
-                handle_city_selection(selected_city_data.to_dict('records'))
+        # Add city selection interface below the globe
+        st.markdown("### 🏙️ Select Cities for Comparison")
+        col1, col2 = st.columns(2)
+        
+        # Create dropdown list of cities
+        city_options = [f"{row['city_name']}, {row['country']}" for _, row in clean_df.iterrows()]
+        
+        with col1:
+            st.markdown("**Origin City:**")
+            origin_selection = st.selectbox(
+                "Choose origin city",
+                options=[""] + city_options,
+                index=0,
+                key="origin_selector"
+            )
+            if origin_selection and origin_selection != st.session_state.selected_origin:
+                st.session_state.selected_origin = origin_selection
+                st.rerun()
+        
+        with col2:
+            st.markdown("**Destination City:**")
+            # Filter out the origin city from destination options
+            dest_options = [city for city in city_options if city != st.session_state.selected_origin]
+            destination_selection = st.selectbox(
+                "Choose destination city",
+                options=[""] + dest_options,
+                index=0,
+                key="destination_selector"
+            )
+            if destination_selection and destination_selection != st.session_state.selected_destination:
+                st.session_state.selected_destination = destination_selection
+                # Trigger comparison calculation
+                if st.session_state.selected_origin:
+                    calculate_life_cost_comparison()
+                st.rerun()
     
     # Display comparison results if available
     if st.session_state.comparison_result:
@@ -306,19 +330,28 @@ def main():
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Total Cities", len(cities_df))
+        st.metric("Total Cities", len(clean_df))
     
     with col2:
-        avg_aqi = cities_df['standardized_aqi'].mean()
-        st.metric("Average AQI", f"{avg_aqi:.1f}")
+        if not clean_df.empty and 'standardized_aqi' in clean_df.columns:
+            avg_aqi = clean_df['standardized_aqi'].mean()
+            st.metric("Average AQI", f"{avg_aqi:.1f}")
+        else:
+            st.metric("Average AQI", "No data")
     
     with col3:
-        avg_cost = cities_df['cost_of_living_index'].mean()
-        st.metric("Average Cost Index", f"{avg_cost:.1f}")
+        if not clean_df.empty and 'cost_of_living_index' in clean_df.columns:
+            avg_cost = clean_df['cost_of_living_index'].mean()
+            st.metric("Average Cost Index", f"{avg_cost:.1f}")
+        else:
+            st.metric("Average Cost Index", "No data")
     
     with col4:
-        avg_life_exp = cities_df['life_expectancy'].mean()
-        st.metric("Average Life Expectancy", f"{avg_life_exp:.1f} years")
+        if not clean_df.empty and 'life_expectancy' in clean_df.columns:
+            avg_life_exp = clean_df['life_expectancy'].mean()
+            st.metric("Average Life Expectancy", f"{avg_life_exp:.1f} years")
+        else:
+            st.metric("Average Life Expectancy", "No data")
 
 if __name__ == "__main__":
     main()
