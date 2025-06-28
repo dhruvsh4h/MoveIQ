@@ -65,47 +65,59 @@ def load_cities_data():
 def create_globe_visualization(cities_df):
     """Create the 3D globe visualization with pydeck"""
     if cities_df.empty:
+        st.warning("No cities data available for visualization")
         return None
     
-    # Clean and prepare data for visualization
-    cities_df = cities_df.dropna(subset=['standardized_aqi', 'cost_of_living_index', 'life_expectancy'])
-    
-    # Prepare data for visualization
-    cities_df['elevation'] = cities_df['standardized_aqi'] * 2000  # Scale for better visibility
-    cities_df['color'] = cities_df['standardized_aqi'].apply(get_aqi_color)
-    
-    # Create the globe layer with proper 3D globe view
-    layer = pdk.Layer(
-        'ColumnLayer',
-        data=cities_df,
-        get_position=['longitude', 'latitude'],
-        get_elevation='elevation',
-        elevation_scale=1,
-        get_fill_color='color',
-        radius=100000,  # Larger radius for better visibility
-        pickable=True,
-        auto_highlight=True,
-    )
-    
-    # Set the viewport for globe view
-    view_state = pdk.ViewState(
-        longitude=0,
-        latitude=20,
-        zoom=0.5,  # Lower zoom for globe view
-        min_zoom=0,
-        max_zoom=15,
-        pitch=0,  # Start with flat view, user can rotate
-        bearing=0
-    )
-    
-    # Render with globe map style
-    deck = pdk.Deck(
-        layers=[layer],
-        initial_view_state=view_state,
-        map_style='mapbox://styles/mapbox/satellite-v9'  # Globe-like appearance
-    )
-    
-    return deck
+    try:
+        # Clean and prepare data for visualization
+        viz_df = cities_df.dropna(subset=['standardized_aqi', 'cost_of_living_index', 'life_expectancy']).copy()
+        
+        if viz_df.empty:
+            st.warning("No cities with complete data for visualization")
+            return None
+        
+        st.info(f"Displaying {len(viz_df)} cities on the globe")
+        
+        # Prepare data for visualization
+        viz_df['elevation'] = viz_df['standardized_aqi'] * 1000  # Scale for visibility
+        viz_df['color'] = viz_df['standardized_aqi'].apply(get_aqi_color)
+        
+        # Create the globe layer
+        layer = pdk.Layer(
+            'ColumnLayer',
+            data=viz_df,
+            get_position='[longitude, latitude]',
+            get_elevation='elevation',
+            elevation_scale=50,
+            get_fill_color='color',
+            radius=50000,
+            pickable=True,
+            auto_highlight=True,
+        )
+        
+        # Set the viewport
+        view_state = pdk.ViewState(
+            longitude=0,
+            latitude=20,
+            zoom=1,
+            min_zoom=0,
+            max_zoom=15,
+            pitch=45,
+            bearing=0
+        )
+        
+        # Create deck with simple map style
+        deck = pdk.Deck(
+            layers=[layer],
+            initial_view_state=view_state,
+            map_style='mapbox://styles/mapbox/light-v9'
+        )
+        
+        return deck
+        
+    except Exception as e:
+        st.error(f"Error creating visualization: {str(e)}")
+        return None
 
 def get_aqi_color(aqi_value):
     """Convert AQI value to color for visualization"""
@@ -274,8 +286,15 @@ def main():
     
     st.session_state.cities_data = cities_df
     
+    # Debug information
+    st.write(f"Total cities loaded: {len(cities_df)}")
+    if not cities_df.empty:
+        st.write("Sample data:")
+        st.write(cities_df[['city_name', 'country', 'standardized_aqi', 'latitude', 'longitude']].head())
+    
     # Clean data for use throughout the app
     clean_df = cities_df.dropna(subset=['standardized_aqi', 'cost_of_living_index', 'life_expectancy'])
+    st.write(f"Cities with complete data: {len(clean_df)}")
     
     # Create and display the globe
     st.markdown("### 🌐 Interactive 3D Globe")
@@ -284,13 +303,20 @@ def main():
     deck = create_globe_visualization(cities_df)
     if deck:
         st.pydeck_chart(deck)
+    else:
+        st.error("Unable to create globe visualization")
         
-        # Add city selection interface below the globe
-        st.markdown("### 🏙️ Select Cities for Comparison")
-        col1, col2 = st.columns(2)
-        
-        # Create dropdown list of cities
+    # Add city selection interface below the globe
+    st.markdown("### 🏙️ Select Cities for Comparison")
+    col1, col2 = st.columns(2)
+    
+    # Create dropdown list of cities from clean data
+    if not clean_df.empty:
         city_options = [f"{row['city_name']}, {row['country']}" for _, row in clean_df.iterrows()]
+        st.info(f"Found {len(city_options)} cities available for comparison")
+    else:
+        city_options = []
+        st.warning("No cities available for selection")
         
         with col1:
             st.markdown("**Origin City:**")
