@@ -1,0 +1,71 @@
+Project Blueprint: The True Cost of Living
+This document outlines the development plan for a multi-faceted data application analyzing the relationship between cost of living, air quality, and public health outcomes. The project is structured around a core Version 1.0 deliverable, with a clear roadmap for future enhancements.
+
+Version 1.0 Scope: The Interactive "Click-to-Compare" Globe
+The initial version will be a fully functional and impressive Minimum Viable Product (MVP). The user experience will be centered around an interactive 3D globe that allows for direct exploration and analysis.
+
+Core V1 Functionality:
+
+The user is presented with a 3D globe showing cities represented by 3D bars. The height and color of each bar correspond to the city's standardized AQI.
+
+The user clicks a first city (e.g., Kelowna) to set it as the "Origin".
+
+The user clicks a second city (e.g., Vancouver) to set it as the "Destination".
+
+Upon the second click, the application instantly performs the core "Life-Cost" analysis and displays the results in a clear summary card.
+
+V1 Delivers on Three Key Modules:
+
+Module 5 (Interface): The interactive 3D Globe is the primary user interface.
+
+Module 2 (Engine): The AQI Normalization Engine works in the background to ensure all data shown on the globe is standardized and comparable.
+
+Module 1 (Analysis): The "Life-Cost" trade-off calculation is triggered by user interaction, providing the core insight.
+
+Core Modules (Integrated in V1)
+Module 1: The Core "Life-Cost" Trade-off Analysis
+Objective: To quantify the trade-off between the financial cost of living and the potential health impact of moving between two user-selected cities.
+
+Data Sources:
+
+Air Quality API: OpenWeather or IQAir for raw pollutant concentrations (PM2.5, etc.).
+
+Cost of Living API: RapidAPI Hub or scraped data.
+
+Life Expectancy API/Source: World Bank or WHO.
+
+Health Impact Factor: AQLI Methodology (e.g., 10 µg/m³ of PM2.5 ≈ 1 year of life expectancy).
+
+Data Engineering & Analysis Steps:
+
+Pipeline Construction: Build an automated ETL pipeline to ingest data from all APIs into a Neon Postgres database.
+
+Data Integration: Join city-level data (AQI, Cost) with country-level data (Life Expectancy).
+
+Modeling the "Life-Cost" Metric: On user's second click, calculate and display Δ Cost of Living and Δ Life Expectancy.
+
+Module 2: The AQI Normalization Engine
+Objective: To create a standardized, universally comparable AQI score for true apples-to-apples city comparisons.
+
+Data Engineering & Analysis Steps:
+
+Decomposition: Ingest and store raw pollutant concentrations (µg/m³), not just reported AQI values.
+
+Standardization: Choose the U.S. EPA's AQI standard as the universal benchmark.
+
+Normalization Function: Create a Python function calculate_standardized_aqi() that takes raw pollutant data from any city and calculates a single, comparable AQI value. This value will drive the globe visualization.
+
+Module 5: Interactive 3D Globe Visualization
+Objective: To provide an immersive, intuitive interface for data exploration and analysis.
+
+Core V1 Technology:
+
+pydeck: A Python library for high-performance visual exploratory data analysis that integrates with Streamlit.
+
+V1 Features & Implementation:
+
+3D Globe Interface: Use pydeck's GlobeView to create an interactive globe that users can pan, rotate, and zoom.
+
+Live AQI Data Layer: Visualize the standardized AQI (from Module 2) for cities using pydeck's ColumnLayer. The height and color of each 3D bar will represent the air quality.
+
+Click Interaction: Implement event handlers in pydeck to capture user clicks on cities to trigger the two-step "Click-to-Compare" analysis from Module 1.
