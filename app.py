@@ -49,7 +49,21 @@ def load_cities_data():
             AND cost_of_living_index IS NOT NULL
             ORDER BY city_name
             """
-            df = pd.read_sql(query, conn)
+            # Execute query and fetch results manually to avoid pandas warning
+            cursor = conn.cursor()
+            cursor.execute(query)
+            
+            # Get column names safely
+            if cursor.description:
+                columns = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
+                cursor.close()
+                
+                # Create DataFrame from fetched data
+                df = pd.DataFrame(rows, columns=columns)
+            else:
+                cursor.close()
+                return pd.DataFrame()
             
             # Ensure numeric columns are properly typed
             numeric_columns = ['standardized_aqi', 'cost_of_living_index', 'life_expectancy', 'pm25_concentration', 'latitude', 'longitude']
@@ -285,6 +299,11 @@ def main():
         return
     
     st.session_state.cities_data = cities_df
+    
+    # Add a button to clear cache and reload data
+    if st.sidebar.button("Clear Cache & Reload Data"):
+        st.cache_data.clear()
+        st.rerun()
     
     # Debug information
     st.write(f"Total cities loaded: {len(cities_df)}")
