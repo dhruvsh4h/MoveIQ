@@ -91,14 +91,11 @@ def create_map_visualization(cities_df, origin_city=None, dest_city=None):
         
         st.success(f"Displaying {len(viz_df)} cities on the map")
         
-        # Prepare data for visualization
-        viz_df['radius'] = viz_df['standardized_aqi'] * 300 + 2000
+        # Prepare data for visualization with better scaling
+        viz_df['radius'] = viz_df['standardized_aqi'] * 200 + 3000  # Larger, more visible circles
         viz_df['color'] = viz_df['standardized_aqi'].apply(get_aqi_color)
         
-        # Debug: Show sample of prepared data
-        st.write("Sample visualization data:")
-        sample_cols = ['city_name', 'country', 'latitude', 'longitude', 'standardized_aqi', 'radius']
-        st.write(viz_df[sample_cols].head(3))
+        # Remove debug information for cleaner interface
         
         layers = []
         
@@ -147,11 +144,11 @@ def create_map_visualization(cities_df, origin_city=None, dest_city=None):
             bearing=0
         )
         
-        # Create deck with a clean, elegant map style
+        # Create deck with enhanced map styling
         deck = pdk.Deck(
             layers=layers,
             initial_view_state=view_state,
-            map_style='mapbox://styles/mapbox/light-v10'
+            map_style='mapbox://styles/mapbox/outdoors-v11'  # Better for showing borders and labels
         )
         
         return deck
@@ -363,6 +360,15 @@ def main():
     # Create and display the map
     st.markdown("### 🗺️ Interactive World Map")
     st.markdown("*Circle size and color represent Air Quality Index (AQI) levels across cities worldwide*")
+    
+    # Add legend
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("🟢 **Good Air Quality** (AQI ≤ 50)")
+    with col2:
+        st.markdown("🟡 **Moderate Air Quality** (AQI 51-100)")
+    with col3:
+        st.markdown("🔴 **Poor Air Quality** (AQI > 100)")
     
     deck = create_map_visualization(
         cities_df, 
