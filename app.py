@@ -76,8 +76,8 @@ def load_cities_data():
         st.error(f"Error loading cities data: {str(e)}")
         return pd.DataFrame()
 
-def create_globe_visualization(cities_df):
-    """Create the 3D globe visualization with pydeck"""
+def create_map_visualization(cities_df, origin_city=None, dest_city=None):
+    """Create an elegant 2D map visualization with optional flight path"""
     if cities_df.empty:
         st.warning("No cities data available for visualization")
         return None
@@ -90,47 +90,92 @@ def create_globe_visualization(cities_df):
             st.warning("No cities with complete data for visualization")
             return None
         
-        st.info(f"Displaying {len(viz_df)} cities on the globe")
+        st.info(f"Displaying {len(viz_df)} cities on the map")
         
         # Prepare data for visualization
-        viz_df['elevation'] = viz_df['standardized_aqi'] * 1000  # Scale for visibility
+        viz_df['radius'] = viz_df['standardized_aqi'] * 300 + 2000
         viz_df['color'] = viz_df['standardized_aqi'].apply(get_aqi_color)
         
-        # Create the globe layer
-        layer = pdk.Layer(
-            'ColumnLayer',
+        layers = []
+        
+        # Create the scatter plot layer for cities
+        cities_layer = pdk.Layer(
+            'ScatterplotLayer',
             data=viz_df,
             get_position='[longitude, latitude]',
-            get_elevation='elevation',
-            elevation_scale=50,
+            get_radius='radius',
             get_fill_color='color',
-            radius=50000,
+            get_line_color=[255, 255, 255, 100],
+            line_width_min_pixels=1,
             pickable=True,
             auto_highlight=True,
         )
+        layers.append(cities_layer)
         
-        # Set the viewport
+        # Add flight path if both cities are selected
+        if origin_city and dest_city:
+            flight_data = create_flight_path_data(viz_df, origin_city, dest_city)
+            if flight_data:
+                arc_layer = pdk.Layer(
+                    'ArcLayer',
+                    data=flight_data,
+                    get_source_position='[source_lon, source_lat]',
+                    get_target_position='[target_lon, target_lat]',
+                    get_source_color=[255, 140, 0, 200],  # Orange
+                    get_target_color=[255, 69, 0, 200],   # Red-orange
+                    auto_highlight=True,
+                    width_scale=0.0001,
+                    get_width=50,
+                )
+                layers.append(arc_layer)
+        
+        # Set the viewport for a global view
         view_state = pdk.ViewState(
-            longitude=0,
-            latitude=20,
-            zoom=1,
+            longitude=20,
+            latitude=30,
+            zoom=1.5,
             min_zoom=0,
             max_zoom=15,
-            pitch=45,
+            pitch=0,
             bearing=0
         )
         
-        # Create deck with simple map style
+        # Create deck with a clean, elegant map style
         deck = pdk.Deck(
-            layers=[layer],
+            layers=layers,
             initial_view_state=view_state,
-            map_style='mapbox://styles/mapbox/light-v9'
+            map_style='mapbox://styles/mapbox/light-v10'
         )
         
         return deck
         
     except Exception as e:
         st.error(f"Error creating visualization: {str(e)}")
+        return None
+
+def create_flight_path_data(cities_df, origin_city, dest_city):
+    """Create flight path data for arc visualization"""
+    try:
+        origin_data = cities_df[cities_df.apply(lambda x: f"{x['city_name']}, {x['country']}" == origin_city, axis=1)]
+        dest_data = cities_df[cities_df.apply(lambda x: f"{x['city_name']}, {x['country']}" == dest_city, axis=1)]
+        
+        if origin_data.empty or dest_data.empty:
+            return None
+        
+        origin_row = origin_data.iloc[0]
+        dest_row = dest_data.iloc[0]
+        
+        return [{
+            'source_lon': origin_row['longitude'],
+            'source_lat': origin_row['latitude'],
+            'target_lon': dest_row['longitude'],
+            'target_lat': dest_row['latitude'],
+            'origin_city': origin_city,
+            'dest_city': dest_city
+        }]
+        
+    except Exception as e:
+        print(f"Error creating flight path data: {e}")
         return None
 
 def get_aqi_color(aqi_value):
@@ -315,15 +360,19 @@ def main():
     clean_df = cities_df.dropna(subset=['standardized_aqi', 'cost_of_living_index', 'life_expectancy'])
     st.write(f"Cities with complete data: {len(clean_df)}")
     
-    # Create and display the globe
-    st.markdown("### 🌐 Interactive 3D Globe")
-    st.markdown("*3D bars represent Air Quality Index (AQI) - height and color indicate air quality levels*")
+    # Create and display the map
+    st.markdown("### 🗺️ Interactive World Map")
+    st.markdown("*Circle size and color represent Air Quality Index (AQI) levels across cities worldwide*")
     
-    deck = create_globe_visualization(cities_df)
+    deck = create_map_visualization(
+        cities_df, 
+        origin_city=st.session_state.selected_origin,
+        dest_city=st.session_state.selected_destination
+    )
     if deck:
         st.pydeck_chart(deck)
     else:
-        st.error("Unable to create globe visualization")
+        st.error("Unable to create map visualization")
         
     # Add city selection interface below the globe
     st.markdown("### 🏙️ Select Cities for Comparison")

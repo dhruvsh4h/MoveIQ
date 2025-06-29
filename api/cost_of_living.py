@@ -1,182 +1,161 @@
-import requests
 import os
-from typing import Dict, List, Optional
+import http.client
 import json
+import urllib.parse
+from typing import Dict, List, Optional
 
 class CostOfLivingAPI:
-    """Handles cost of living data from RapidAPI sources"""
+    """Handles cost of living data from RapidAPI find-places-to-live service"""
     
     def __init__(self):
         self.rapidapi_key = os.getenv('RAPIDAPI_KEY', '')
-        self.rapidapi_host = "cost-of-living-and-prices.p.rapidapi.com"
-        self.base_url = f"https://{self.rapidapi_host}"
+        self.rapidapi_host = "find-places-to-live.p.rapidapi.com"
         
-        self.headers = {
-            "X-RapidAPI-Key": self.rapidapi_key,
-            "X-RapidAPI-Host": self.rapidapi_host
-        }
-    
     def get_cost_of_living_data(self, city: str, country: str) -> Optional[Dict]:
-        """Get cost of living data for a specific city"""
+        """Get cost of living data for a specific city using RapidAPI"""
         if not self.rapidapi_key:
             return None
-        
+            
         try:
-            # Try different endpoint variations
-            endpoints = [
-                f"/v1/cost-of-living/city/{city}/country/{country}",
-                f"/cost-of-living/{city}",
-                f"/cities/{city}-{country}"
+            conn = http.client.HTTPSConnection(self.rapidapi_host)
+            
+            # Format the place parameter - try different formats
+            place_formats = [
+                f"{city.lower().replace(' ', '-')}-{country.lower().replace(' ', '-')}",
+                f"{city.lower()}-{country.lower()}",
+                city.lower().replace(' ', '-')
             ]
             
-            for endpoint in endpoints:
+            for place in place_formats:
                 try:
-                    url = f"{self.base_url}{endpoint}"
-                    response = requests.get(url, headers=self.headers, timeout=10)
+                    headers = {
+                        'x-rapidapi-key': self.rapidapi_key,
+                        'x-rapidapi-host': self.rapidapi_host
+                    }
                     
-                    if response.status_code == 200:
-                        data = response.json()
-                        return self._parse_cost_data(data, city, country)
+                    endpoint = f"/placesToLive?place={place}&type=City"
+                    conn.request("GET", endpoint, headers=headers)
                     
-                except requests.RequestException:
+                    res = conn.getresponse()
+                    data = res.read()
+                    
+                    if res.status == 200:
+                        response_data = json.loads(data.decode("utf-8"))
+                        conn.close()
+                        return self._parse_rapidapi_data(response_data, city, country)
+                    
+                except Exception as e:
+                    print(f"Error trying place format '{place}': {e}")
                     continue
             
-            # Fallback to numbeo-style data
-            return self._get_numbeo_style_data(city, country)
-            
+            conn.close()
+            return None
+                
         except Exception as e:
-            print(f"Cost of living API request failed for {city}, {country}: {str(e)}")
+            print(f"Error fetching RapidAPI cost of living data: {e}")
             return None
     
-    def _parse_cost_data(self, data: Dict, city: str, country: str) -> Dict:
-        """Parse cost of living data from API response"""
+    def _parse_rapidapi_data(self, data: Dict, city: str, country: str) -> Dict:
+        """Parse RapidAPI cost of living response data"""
         try:
-            # Handle different API response formats
-            if 'cost_of_living_index' in data:
-                return {
-                    'cost_of_living_index': data.get('cost_of_living_index', 100),
-                    'rent_index': data.get('rent_index', 100),
-                    'cost_of_living_plus_rent_index': data.get('cost_of_living_plus_rent_index', 100),
-                    'groceries_index': data.get('groceries_index', 100),
-                    'restaurant_price_index': data.get('restaurant_price_index', 100),
-                    'local_purchasing_power_index': data.get('local_purchasing_power_index', 100),
-                    'source': 'rapidapi'
-                }
-            
-            elif 'indices' in data:
-                indices = data['indices']
-                return {
-                    'cost_of_living_index': indices.get('cost_of_living_index', 100),
-                    'rent_index': indices.get('rent_index', 100),
-                    'cost_of_living_plus_rent_index': indices.get('cost_of_living_plus_rent_index', 100),
-                    'groceries_index': indices.get('groceries_index', 100),
-                    'restaurant_price_index': indices.get('restaurant_price_index', 100),
-                    'local_purchasing_power_index': indices.get('local_purchasing_power_index', 100),
-                    'source': 'rapidapi'
-                }
-            
-            # Default fallback with estimated values
-            return self._generate_estimated_cost_data(city, country)
-            
-        except (KeyError, TypeError, ValueError) as e:
-            print(f"Failed to parse cost data for {city}, {country}: {str(e)}")
-            return self._generate_estimated_cost_data(city, country)
-    
-    def _get_numbeo_style_data(self, city: str, country: str) -> Optional[Dict]:
-        """Get data using Numbeo-style API endpoints"""
-        try:
-            # Alternative API endpoint structures
-            alt_headers = {
-                "X-RapidAPI-Key": self.rapidapi_key,
-                "X-RapidAPI-Host": "numbeo.p.rapidapi.com"
+            parsed_data = {
+                'city': city,
+                'country': country,
+                'source': 'rapidapi_places_to_live',
+                'data_date': '2025-06-28'
             }
             
-            url = f"https://numbeo.p.rapidapi.com/get_city_prices_by_name"
-            params = {
-                'name': f"{city}, {country}"
-            }
+            # Extract report card data
+            if 'report-card' in data:
+                report_card = data['report-card']
+                
+                # Overall grades and scores
+                if 'Overall Niche Grade' in report_card:
+                    parsed_data['overall_grade'] = report_card['Overall Niche Grade'].get('value', 0)
+                
+                if 'Cost of Living' in report_card:
+                    parsed_data['cost_of_living_grade'] = report_card['Cost of Living'].get('value', 0)
+                
+                if 'Housing' in report_card:
+                    parsed_data['housing_grade'] = report_card['Housing'].get('value', 0)
+                
+                # Quality of life indicators
+                parsed_data['public_schools_grade'] = report_card.get('Public Schools', {}).get('value', 0)
+                parsed_data['crime_safety_grade'] = report_card.get('Crime & Safety', {}).get('value', 0)
+                parsed_data['nightlife_grade'] = report_card.get('Nightlife', {}).get('value', 0)
+                parsed_data['family_friendly_grade'] = report_card.get('Good for Families', {}).get('value', 0)
+                parsed_data['diversity_grade'] = report_card.get('Diversity', {}).get('value', 0)
+                parsed_data['jobs_grade'] = report_card.get('Jobs', {}).get('value', 0)
+                parsed_data['weather_grade'] = report_card.get('Weather', {}).get('value', 0)
+                parsed_data['health_fitness_grade'] = report_card.get('Health & Fitness', {}).get('value', 0)
+                parsed_data['outdoor_activities_grade'] = report_card.get('Outdoor Activities', {}).get('value', 0)
+                parsed_data['commute_grade'] = report_card.get('Commute', {}).get('value', 0)
             
-            response = requests.get(url, headers=alt_headers, params=params, timeout=10)
+            # Extract real estate data
+            if 'real-estate' in data:
+                real_estate = data['real-estate']
+                parsed_data['median_home_value'] = real_estate.get('Median Home Value', {}).get('value', 0)
+                parsed_data['median_home_value_national'] = real_estate.get('Median Home Value', {}).get('national', 0)
+                parsed_data['median_rent'] = real_estate.get('Median Rent', {}).get('value', 0)
+                parsed_data['median_rent_national'] = real_estate.get('Median Rent', {}).get('national', 0)
+                parsed_data['area_feel'] = real_estate.get('Area Feel', {}).get('value', '')
             
-            if response.status_code == 200:
-                data = response.json()
-                return self._parse_numbeo_data(data, city, country)
+            # Extract income data
+            if 'working-in' in data:
+                working_data = data['working-in']
+                parsed_data['median_household_income'] = working_data.get('Median Household Income', {}).get('value', 0)
+                parsed_data['median_household_income_national'] = working_data.get('Median Household Income', {}).get('national', 0)
             
-            return None
+            # Extract population data
+            if 'about' in data:
+                about_data = data['about']
+                parsed_data['population'] = about_data.get('Population', {}).get('value', 0)
+            
+            # Calculate cost of living index (normalized to 100 as baseline)
+            home_value = float(parsed_data.get('median_home_value', 0))
+            home_national = float(parsed_data.get('median_home_value_national', 1))
+            rent_value = float(parsed_data.get('median_rent', 0))
+            rent_national = float(parsed_data.get('median_rent_national', 1))
+            
+            if home_value > 0 and home_national > 0:
+                home_ratio = home_value / home_national
+                rent_ratio = rent_value / max(rent_national, 1)
+                parsed_data['cost_of_living_index'] = ((home_ratio + rent_ratio) / 2) * 100
+            else:
+                # Fallback to grade-based index
+                grade = float(parsed_data.get('cost_of_living_grade', 3))
+                parsed_data['cost_of_living_index'] = max(20.0, min(200.0, (5 - grade) * 40 + 60))
+            
+            # Extract review data
+            if 'reviews' in data:
+                reviews = data['reviews']
+                parsed_data['review_score'] = reviews.get('stars', {}).get('value', 0)
+                parsed_data['review_count'] = reviews.get('stars', {}).get('count', 0)
+            
+            return parsed_data
             
         except Exception as e:
-            print(f"Numbeo API fallback failed for {city}, {country}: {str(e)}")
-            return None
-    
-    def _parse_numbeo_data(self, data: Dict, city: str, country: str) -> Dict:
-        """Parse Numbeo API response data"""
-        try:
-            if 'cost_of_living_index' in data:
-                return {
-                    'cost_of_living_index': data.get('cost_of_living_index', 100),
-                    'rent_index': data.get('rent_index', 100),
-                    'cost_of_living_plus_rent_index': data.get('cost_of_living_plus_rent_index', 100),
-                    'groceries_index': data.get('groceries_index', 100),
-                    'restaurant_price_index': data.get('restaurant_price_index', 100),
-                    'local_purchasing_power_index': data.get('local_purchasing_power_index', 100),
-                    'source': 'numbeo'
-                }
-            
-            return self._generate_estimated_cost_data(city, country)
-            
-        except Exception:
-            return self._generate_estimated_cost_data(city, country)
-    
-    def _generate_estimated_cost_data(self, city: str, country: str) -> Dict:
-        """Generate estimated cost data based on city/country"""
-        # Basic cost estimation based on country and city tier
-        cost_multipliers = {
-            'Switzerland': 1.8, 'Norway': 1.7, 'Denmark': 1.6, 'Luxembourg': 1.6,
-            'Iceland': 1.5, 'Singapore': 1.4, 'United States': 1.3, 'Australia': 1.25,
-            'Germany': 1.1, 'United Kingdom': 1.15, 'France': 1.1, 'Canada': 1.2,
-            'Japan': 1.2, 'South Korea': 1.0, 'Italy': 1.0, 'Spain': 0.9,
-            'China': 0.6, 'India': 0.4, 'Mexico': 0.5, 'Brazil': 0.6,
-            'Russia': 0.5, 'Poland': 0.7, 'Turkey': 0.6, 'Thailand': 0.5
-        }
-        
-        base_index = 100
-        country_multiplier = cost_multipliers.get(country, 1.0)
-        
-        # City tier adjustments
-        major_cities = ['New York', 'London', 'Tokyo', 'Singapore', 'Hong Kong', 
-                       'Paris', 'Sydney', 'Toronto', 'Vancouver', 'San Francisco',
-                       'Los Angeles', 'Boston', 'Washington', 'Seattle']
-        
-        city_multiplier = 1.3 if city in major_cities else 1.0
-        
-        final_index = base_index * country_multiplier * city_multiplier
-        
-        return {
-            'cost_of_living_index': round(final_index, 1),
-            'rent_index': round(final_index * 1.2, 1),  # Rent typically higher
-            'cost_of_living_plus_rent_index': round(final_index * 1.1, 1),
-            'groceries_index': round(final_index * 0.9, 1),
-            'restaurant_price_index': round(final_index * 1.1, 1),
-            'local_purchasing_power_index': round(100 / country_multiplier, 1),
-            'source': 'estimated'
-        }
+            print(f"Error parsing RapidAPI data: {e}")
+            return {
+                'city': city,
+                'country': country,
+                'cost_of_living_index': 100,  # Default neutral value
+                'source': 'rapidapi_places_to_live_fallback'
+            }
     
     def get_multiple_cities_cost_data(self, cities: List[Dict]) -> Dict[str, Dict]:
         """Get cost of living data for multiple cities"""
         results = {}
         
         for city_info in cities:
-            city_key = f"{city_info['city_name']}, {city_info['country']}"
+            city_name = city_info.get('city_name', '')
+            country = city_info.get('country', '')
             
-            cost_data = self.get_cost_of_living_data(
-                city_info['city_name'],
-                city_info['country']
-            )
-            
-            if cost_data:
-                results[city_key] = cost_data
-            else:
-                print(f"Failed to get cost data for {city_key}")
+            if city_name and country:
+                cost_data = self.get_cost_of_living_data(city_name, country)
+                
+                if cost_data:
+                    results[f"{city_name}, {country}"] = cost_data
         
         return results
     
