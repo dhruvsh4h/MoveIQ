@@ -95,19 +95,27 @@ def create_map_visualization(cities_df, origin_city=None, dest_city=None):
         viz_df['radius'] = viz_df['standardized_aqi'] * 300 + 2000
         viz_df['color'] = viz_df['standardized_aqi'].apply(get_aqi_color)
         
+        # Debug: Show sample of prepared data
+        st.write("Sample visualization data:")
+        sample_cols = ['city_name', 'country', 'latitude', 'longitude', 'standardized_aqi', 'radius']
+        st.write(viz_df[sample_cols].head(3))
+        
         layers = []
         
         # Create the scatter plot layer for cities
         cities_layer = pdk.Layer(
             'ScatterplotLayer',
             data=viz_df,
-            get_position='[longitude, latitude]',
+            get_position=['longitude', 'latitude'],
             get_radius='radius',
             get_fill_color='color',
-            get_line_color=[255, 255, 255, 100],
-            line_width_min_pixels=1,
+            get_line_color=[255, 255, 255, 80],
+            line_width_min_pixels=2,
             pickable=True,
             auto_highlight=True,
+            radius_scale=1,
+            radius_min_pixels=3,
+            radius_max_pixels=60
         )
         layers.append(cities_layer)
         
@@ -118,10 +126,10 @@ def create_map_visualization(cities_df, origin_city=None, dest_city=None):
                 arc_layer = pdk.Layer(
                     'ArcLayer',
                     data=flight_data,
-                    get_source_position='[source_lon, source_lat]',
-                    get_target_position='[target_lon, target_lat]',
-                    get_source_color=[255, 140, 0, 200],  # Orange
-                    get_target_color=[255, 69, 0, 200],   # Red-orange
+                    get_source_position=['source_lon', 'source_lat'],
+                    get_target_position=['target_lon', 'target_lat'],
+                    get_source_color=[255, 140, 0, 200],
+                    get_target_color=[255, 69, 0, 200],
                     auto_highlight=True,
                     width_scale=0.0001,
                     get_width=50,
