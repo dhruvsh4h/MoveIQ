@@ -2,6 +2,7 @@ import streamlit as st
 import pydeck as pdk
 import pandas as pd
 import numpy as np
+import os
 from database.connection import DatabaseManager
 from data.etl_pipeline import ETLPipeline
 from analysis.life_cost_calculator import LifeCostCalculator
@@ -31,47 +32,45 @@ if 'comparison_result' not in st.session_state:
 def load_cities_data():
     """Load and cache cities data from database"""
     try:
-        db_manager = DatabaseManager()
-        with db_manager.get_connection() as conn:
-            query = """
-            SELECT 
-                city_name,
-                country,
-                latitude,
-                longitude,
-                CAST(standardized_aqi AS FLOAT) as standardized_aqi,
-                CAST(cost_of_living_index AS FLOAT) as cost_of_living_index,
-                CAST(life_expectancy AS FLOAT) as life_expectancy,
-                CAST(pm25_concentration AS FLOAT) as pm25_concentration,
-                last_updated
-            FROM cities_analysis 
-            WHERE standardized_aqi IS NOT NULL 
-            AND cost_of_living_index IS NOT NULL
-            ORDER BY city_name
-            """
-            # Execute query and fetch results manually to avoid pandas warning
-            cursor = conn.cursor()
-            cursor.execute(query)
-            
-            # Get column names safely
-            if cursor.description:
-                columns = [desc[0] for desc in cursor.description]
-                rows = cursor.fetchall()
-                cursor.close()
-                
-                # Create DataFrame from fetched data
-                df = pd.DataFrame(rows, columns=columns)
-            else:
-                cursor.close()
-                return pd.DataFrame()
-            
-            # Ensure numeric columns are properly typed
-            numeric_columns = ['standardized_aqi', 'cost_of_living_index', 'life_expectancy', 'pm25_concentration', 'latitude', 'longitude']
-            for col in numeric_columns:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-            
-            return df
+        import psycopg2
+        
+        DATABASE_URL = os.getenv('DATABASE_URL')
+        conn = psycopg2.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        
+        query = """
+        SELECT 
+            city_name,
+            country,
+            latitude,
+            longitude,
+            standardized_aqi,
+            cost_of_living_index,
+            life_expectancy,
+            pm25_concentration
+        FROM cities_analysis 
+        WHERE standardized_aqi IS NOT NULL 
+        AND cost_of_living_index IS NOT NULL
+        ORDER BY city_name
+        """
+        
+        cursor.execute(query)
+        columns = [desc[0] for desc in cursor.description]
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Create DataFrame from fetched data
+        df = pd.DataFrame(rows, columns=columns)
+        
+        # Ensure numeric columns are properly typed
+        numeric_columns = ['standardized_aqi', 'cost_of_living_index', 'life_expectancy', 'pm25_concentration', 'latitude', 'longitude']
+        for col in numeric_columns:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        return df
+        
     except Exception as e:
         st.error(f"Error loading cities data: {str(e)}")
         return pd.DataFrame()
@@ -90,7 +89,7 @@ def create_map_visualization(cities_df, origin_city=None, dest_city=None):
             st.warning("No cities with complete data for visualization")
             return None
         
-        st.info(f"Displaying {len(viz_df)} cities on the map")
+        st.success(f"Displaying {len(viz_df)} cities on the map")
         
         # Prepare data for visualization
         viz_df['radius'] = viz_df['standardized_aqi'] * 300 + 2000
@@ -350,15 +349,8 @@ def main():
         st.cache_data.clear()
         st.rerun()
     
-    # Debug information
-    st.write(f"Total cities loaded: {len(cities_df)}")
-    if not cities_df.empty:
-        st.write("Sample data:")
-        st.write(cities_df[['city_name', 'country', 'standardized_aqi', 'latitude', 'longitude']].head())
-    
     # Clean data for use throughout the app
     clean_df = cities_df.dropna(subset=['standardized_aqi', 'cost_of_living_index', 'life_expectancy'])
-    st.write(f"Cities with complete data: {len(clean_df)}")
     
     # Create and display the map
     st.markdown("### 🗺️ Interactive World Map")
