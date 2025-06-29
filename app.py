@@ -7,6 +7,7 @@ from database.connection import DatabaseManager
 from data.etl_pipeline import ETLPipeline
 from analysis.life_cost_calculator import LifeCostCalculator
 from utils.constants import GLOBE_CONFIG
+from methodology import get_methodology_text
 import asyncio
 import json
 
@@ -133,13 +134,13 @@ def create_map_visualization(cities_df, origin_city=None, dest_city=None):
                 )
                 layers.append(arc_layer)
         
-        # Set the viewport for a global view
+        # Set the viewport for a global view with zoom constraints
         view_state = pdk.ViewState(
             longitude=20,
             latitude=30,
             zoom=1.5,
-            min_zoom=0,
-            max_zoom=15,
+            min_zoom=1.0,  # Prevent infinite zoom out - shows entire world
+            max_zoom=12,   # Reasonable city-level zoom limit
             pitch=0,
             bearing=0
         )
@@ -282,16 +283,67 @@ def display_comparison_card():
                 delta=f"{life_exp_delta:+.2f} years"
             )
         
-        # Summary interpretation
-        st.markdown("#### 💡 Analysis Summary")
-        if cost_delta > 0 and life_exp_delta > 0:
-            st.success("💰➡️❤️ Higher cost, but better health outcomes - a worthwhile investment in your wellbeing!")
-        elif cost_delta < 0 and life_exp_delta > 0:
-            st.success("🎉 Best of both worlds - lower cost AND better health outcomes!")
-        elif cost_delta > 0 and life_exp_delta < 0:
-            st.warning("⚠️ Higher cost with worse health outcomes - consider if other factors justify this move.")
-        else:
-            st.info("📊 Lower cost but potentially worse health outcomes - weigh your priorities carefully.")
+        # Enhanced Scientific Analysis
+        st.markdown("#### 🔬 Scientific Analysis")
+        
+        # Create detailed analysis tabs
+        tab1, tab2, tab3 = st.tabs(["📊 Summary", "🧮 Calculations", "⚠️ Limitations"])
+        
+        with tab1:
+            # Summary interpretation with cost-effectiveness
+            if cost_delta > 0 and life_exp_delta > 0:
+                st.success("💰➡️❤️ Higher cost, but better health outcomes - a worthwhile investment in your wellbeing!")
+            elif cost_delta < 0 and life_exp_delta > 0:
+                st.success("🎉 Best of both worlds - lower cost AND better health outcomes!")
+            elif cost_delta > 0 and life_exp_delta < 0:
+                st.warning("⚠️ Higher cost with worse health outcomes - consider if other factors justify this move.")
+            else:
+                st.info("📊 Lower cost but potentially worse health outcomes - weigh your priorities carefully.")
+                
+            # Cost-effectiveness assessment
+            if 'cost_per_life_year' in result and result['cost_per_life_year']:
+                cply = result['cost_per_life_year']
+                st.markdown("**Cost-Effectiveness Analysis:**")
+                if cply < 10000:
+                    st.success(f"Excellent value: ${cply:,.0f} per life year gained")
+                elif cply < 50000:
+                    st.info(f"Good value: ${cply:,.0f} per life year gained")
+                elif cply < 100000:
+                    st.warning(f"Fair value: ${cply:,.0f} per life year gained")
+                else:
+                    st.error(f"Poor value: ${cply:,.0f} per life year gained")
+        
+        with tab2:
+            st.markdown("**Health Impact Calculation:**")
+            st.markdown(f"- **Base Life Expectancy Change**: {result.get('life_expectancy_delta', 0):.2f} years (country-level)")
+            st.markdown(f"- **Air Quality Health Adjustment**: Based on EPA PM2.5 conversion")
+            st.markdown(f"- **Formula Used**: ΔLE = 0.098 × (PM2.5_origin - PM2.5_dest) × risk_factor")
+            
+            st.markdown("**Cost Analysis:**")
+            st.markdown(f"- **Annual Cost Difference**: {cost_delta:.1f}% of baseline living costs")
+            st.markdown(f"- **45-Year Impact**: Assumes working adult remaining lifespan")
+            
+            st.markdown("**Data Sources:**")
+            st.markdown("- Air Quality: RapidAPI Weather Service (EPA-standardized AQI)")
+            st.markdown("- Cost of Living: RapidAPI Find Places to Live indices")
+            st.markdown("- Life Expectancy: World Bank API (country baselines)")
+        
+        with tab3:
+            st.markdown("**Key Limitations:**")
+            st.markdown("- City-level life expectancy estimated from country averages (±2 years)")
+            st.markdown("- PM2.5 concentrations estimated from AQI values (±15% accuracy)")
+            st.markdown("- Health impacts assume long-term residence (5+ years)")
+            st.markdown("- Cost indices may not reflect individual circumstances (±20%)")
+            st.markdown("- Health impact model has ±30% uncertainty range")
+            
+            st.markdown("**Confidence Level:**")
+            score = result.get('recommendation_score', 50)
+            if score > 80:
+                st.success("High confidence - large differences in multiple factors")
+            elif score > 50:
+                st.info("Medium confidence - clear advantage in 2+ factors")
+            else:
+                st.warning("Low confidence - marginal differences or conflicting signals")
 
 def main():
     """Main application function"""
@@ -345,6 +397,12 @@ def main():
         if st.button("Clear Cache"):
             st.cache_data.clear()
             st.rerun()
+        
+        # Methodology section
+        st.markdown("### 🔬 Scientific Methodology")
+        with st.expander("How Our Analysis Works", expanded=False):
+            st.markdown(get_methodology_text())
+            st.info("💡 Click to learn about our scientific approach based on the Air Quality Life Index (AQLI) methodology from the University of Chicago.")
     
     # Load cities data
     with st.spinner("Loading cities data..."):

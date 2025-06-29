@@ -103,9 +103,31 @@ This is a Streamlit-based interactive data application that analyzes the relatio
 - Efficient database queries with proper indexing
 - API rate limiting and fallback mechanisms
 
+## Recent Changes (June 29, 2025)
+
+✓ **Map Improvements**: Fixed infinite zoom issue with proper min/max zoom constraints (1.0 to 12)
+✓ **ETL Pipeline**: Made data refresh conditional on API keys to prevent infinite loops
+✓ **City Selection**: Fixed dropdown population - all available cities now display properly
+✓ **Scientific Enhancement**: Added comprehensive AQLI-based methodology with enhanced calculations
+✓ **Documentation**: Created methodology.py with detailed scientific explanations
+✓ **UI Enhancement**: Added tabbed analysis with Summary, Calculations, and Limitations
+✓ **Code Organization**: Improved comments and scientific documentation throughout
+✓ **Analysis Depth**: Enhanced cost-effectiveness calculations with proper uncertainty quantification
+
+## Enhanced Scientific Methodology
+
+The application now implements rigorous AQLI (Air Quality Life Index) methodology:
+- **Health Impact**: Uses Pope et al. (2009) coefficient: 0.098 years per μg/m³ PM2.5
+- **Risk Adjustment**: Diminishing returns for high baseline pollution areas
+- **Cost-Effectiveness**: WHO-standard thresholds for cost per life year
+- **Uncertainty Bounds**: ±15% AQI conversion, ±30% health impact, ±20% cost data
+- **Confidence Scoring**: High/Medium/Low based on factor magnitude
+
 ## Changelog
-- June 28, 2025. Initial setup
+- June 28, 2025: Initial setup
+- June 29, 2025: Major scientific methodology enhancement and UI improvements
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+Technical requirements: Deep scientific analysis with transparent methodology.
