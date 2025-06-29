@@ -148,7 +148,7 @@ def create_map_visualization(cities_df, origin_city=None, dest_city=None):
         deck = pdk.Deck(
             layers=layers,
             initial_view_state=view_state,
-            map_style='mapbox://styles/mapbox/outdoors-v11'  # Better for showing borders and labels
+            map_style='light'  # Simple style that shows borders and labels clearly
         )
         
         return deck
@@ -329,14 +329,21 @@ def main():
         else:
             st.info("Destination: Not selected")
         
-        # Data refresh
+        # Data refresh (only if API key available)
         st.markdown("### 🔄 Data Management")
-        if st.button("Refresh Data"):
+        if os.getenv('RAPIDAPI_KEY'):
+            if st.button("⚠️ Refresh Data from APIs"):
+                st.cache_data.clear()
+                etl = ETLPipeline()
+                with st.spinner("Updating data from APIs..."):
+                    etl.run_full_pipeline()
+                st.success("Data refreshed!")
+                st.rerun()
+        else:
+            st.info("💡 Add RAPIDAPI_KEY to enable live data updates")
+            
+        if st.button("Clear Cache"):
             st.cache_data.clear()
-            etl = ETLPipeline()
-            with st.spinner("Updating data from APIs..."):
-                etl.run_full_pipeline()
-            st.success("Data refreshed!")
             st.rerun()
     
     # Load cities data
@@ -391,35 +398,35 @@ def main():
     else:
         city_options = []
         st.warning("No cities available for selection")
-        
-        with col1:
-            st.markdown("**Origin City:**")
-            origin_selection = st.selectbox(
-                "Choose origin city",
-                options=[""] + city_options,
-                index=0,
-                key="origin_selector"
-            )
-            if origin_selection and origin_selection != st.session_state.selected_origin:
-                st.session_state.selected_origin = origin_selection
-                st.rerun()
-        
-        with col2:
-            st.markdown("**Destination City:**")
-            # Filter out the origin city from destination options
-            dest_options = [city for city in city_options if city != st.session_state.selected_origin]
-            destination_selection = st.selectbox(
-                "Choose destination city",
-                options=[""] + dest_options,
-                index=0,
-                key="destination_selector"
-            )
-            if destination_selection and destination_selection != st.session_state.selected_destination:
-                st.session_state.selected_destination = destination_selection
-                # Trigger comparison calculation
-                if st.session_state.selected_origin:
-                    calculate_life_cost_comparison()
-                st.rerun()
+    
+    with col1:
+        st.markdown("**Origin City:**")
+        origin_selection = st.selectbox(
+            "Choose origin city",
+            options=[""] + city_options,
+            index=0,
+            key="origin_selector"
+        )
+        if origin_selection and origin_selection != st.session_state.selected_origin:
+            st.session_state.selected_origin = origin_selection
+            st.rerun()
+    
+    with col2:
+        st.markdown("**Destination City:**")
+        # Filter out the origin city from destination options
+        dest_options = [city for city in city_options if city != st.session_state.selected_origin]
+        destination_selection = st.selectbox(
+            "Choose destination city",
+            options=[""] + dest_options,
+            index=0,
+            key="destination_selector"
+        )
+        if destination_selection and destination_selection != st.session_state.selected_destination:
+            st.session_state.selected_destination = destination_selection
+            # Trigger comparison calculation
+            if st.session_state.selected_origin:
+                calculate_life_cost_comparison()
+            st.rerun()
     
     # Display comparison results if available
     if st.session_state.comparison_result:
