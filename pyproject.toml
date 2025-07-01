@@ -10,4 +10,5 @@ dependencies = [
     "pydeck>=0.9.1",
     "requests>=2.32.4",
     "streamlit>=1.46.1",
+    "gunicorn>=22.0.0"
 ]
